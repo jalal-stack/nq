@@ -9,3 +9,25 @@
   <a href="https://aistudio.google.com/apps">Start building</a>
 
 </div>
+
+# TradeMind AI
+
+AI-assisted quantitative research and **paper-trading** platform for crypto, stocks and forex.
+Real-money trading is disabled by design: there is no live execution code.
+
+## Quick start (Python 3.12)
+
+```bash
+python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -e "backend[dev]"            # add [providers] for CCXT + yfinance
+cd backend && pytest
+uvicorn trademind.api.main:app --reload  # http://127.0.0.1:8000/docs
+```
+
+## Docs
+- [Architecture audit](docs/ARCHITECTURE_AUDIT.md)
+- [Implementation roadmap](docs/IMPLEMENTATION_ROADMAP.md)
+- [Known limitations](docs/KNOWN_LIMITATIONS.md)
+- [External integrations register](docs/EXTERNAL_INTEGRATIONS.md)
+
+Nothing here is financial advice, and no backtest result is evidence of future profit.
