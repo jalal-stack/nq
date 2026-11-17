@@ -28,6 +28,14 @@ class Settings(BaseSettings):
     max_correlated_positions: int = 2
     max_data_age_seconds: int = 900
 
+    # Comma-separated browser origins allowed to call the API (e.g. the Vercel frontend).
+    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
+    ws_push_interval_seconds: float = Field(default=5.0, ge=1.0)
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
     @field_validator("trading_mode", mode="before")
     @classmethod
     def _paper_only(cls, v: str) -> str:

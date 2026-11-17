@@ -2,9 +2,19 @@
 
 ## Scope
 - Paper trading only. There is intentionally no live broker, exchange or blockchain execution code.
-- The existing MVP described in the brief was not found in this repository (see `ARCHITECTURE_AUDIT.md`).
-- Not yet implemented: database persistence, Docker Compose, LLM agents/orchestrator, news,
-  fundamentals, sentiment, on-chain adapters, approval workflow, dashboard.
+- The existing MVP described in the brief (`backend/app/...`, `migrations/001_init.sql`) is not in
+  this repository; it appears to exist only on the owner's machine (see `ARCHITECTURE_AUDIT.md`).
+- Not yet implemented: database persistence (PostgreSQL/Redis), LLM agents/orchestrator, news,
+  fundamentals, sentiment, on-chain adapters, approval workflow, portfolio views in the dashboard.
+
+## API & deployment
+- No authentication yet. Current endpoints are read-only or stateless calculations, but the API
+  should not get write endpoints (approvals, paper orders) before auth is added.
+- The WebSocket polls the data provider every `TRADEMIND_WS_PUSH_INTERVAL_SECONDS` per connection;
+  there is no shared fan-out yet, so many simultaneous clients multiply provider calls.
+- The VPS deployment files (systemd, Nginx, Gunicorn) were validated by running Gunicorn with the
+  Uvicorn worker locally; the Nginx config and systemd unit were not exercised on a real VPS.
+- Vercel deployment was verified only as a local production build (`vite build` + `vite preview`).
 
 ## Market data
 - yfinance is an unofficial Yahoo Finance client: delayed, best-effort, limited intraday history,

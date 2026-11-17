@@ -1,16 +1,20 @@
-"""HTTP API. Exposes research, risk and paper-trading functions; no live-trading routes exist."""
+"""HTTP + WebSocket API under /api/v1. Exposes research, risk and paper-trading
+functions; no live-trading routes exist."""
 
 from __future__ import annotations
 
+import asyncio
 import math
 
-from fastapi import FastAPI, HTTPException, Query
-from pydantic import BaseModel
+from fastapi import APIRouter, FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi.concurrency import run_in_threadpool
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
 
 from trademind import __version__
 from trademind.backtest.engine import BacktestResult, EmaRsiAtrStrategy, run_backtest
 from trademind.config import get_settings
-from trademind.data.base import ProviderError
+from trademind.data.base import MarketDataProvider, ProviderError
 from trademind.data.providers import SyntheticProvider
 from trademind.data.validation import DataQualityReport, assess
 from trademind.domain import AssetClass, Instrument, Timeframe
@@ -19,10 +23,19 @@ from trademind.risk.engine import (
     MarketContext, PortfolioState, RiskDecision, RiskEngine, RiskLimits, TradeProposal,
 )
 
-app = FastAPI(title="TradeMind AI", version=__version__)
+API_PREFIX = "/api/v1"
+
+app = FastAPI(title="TradeMind AI", version=__version__, docs_url="/docs", openapi_url="/openapi.json")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=get_settings().cors_origin_list,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type"],
+)
+router = APIRouter(prefix=API_PREFIX)
 
 
-def _provider(name: str):
+def _provider(name: str) -> MarketDataProvider:
     if name == "synthetic":
         return SyntheticProvider()
     try:
@@ -34,14 +47,14 @@ def _provider(name: str):
         raise HTTPException(503, str(e))
 
 
-@app.get("/health")
+@router.get("/health")
 def health() -> dict:
     s = get_settings()
-    return {"status": "ok", "version": __version__, "trading_mode": s.trading_mode,
-            "live_trading_enabled": False}
+    return {"status": "ok", "version": __version__, "mode": "paper_only",
+            "trading_mode": s.trading_mode, "live_execution_enabled": False}
 
 
-@app.get("/config")
+@router.get("/config")
 def config() -> dict:
     s = get_settings()
     return {"base_currency": s.base_currency, "starting_equity": str(s.starting_equity),
@@ -51,6 +64,7 @@ def config() -> dict:
 class OhlcvResponse(BaseModel):
     symbol: str
     provider: str
+    timeframe: Timeframe
     realtime: bool
     quality: DataQualityReport
     candles: list[dict]
@@ -65,10 +79,8 @@ def _records(df) -> list[dict]:
     return out
 
 
-@app.get("/market/{provider}/ohlcv", response_model=OhlcvResponse)
-def ohlcv(provider: str, symbol: str, timeframe: Timeframe = Timeframe.H1,
-          limit: int = Query(300, ge=10, le=2000), indicators: bool = False,
-          continuous: bool = True) -> OhlcvResponse:
+def _load_ohlcv(provider: str, symbol: str, timeframe: Timeframe, limit: int,
+                indicators: bool, continuous: bool) -> OhlcvResponse:
     p = _provider(provider)
     try:
         raw = p.fetch_ohlcv(symbol, timeframe, limit=limit)
@@ -78,8 +90,15 @@ def ohlcv(provider: str, symbol: str, timeframe: Timeframe = Timeframe.H1,
                         max_age_seconds=get_settings().max_data_age_seconds)
     if indicators:
         df = compute_all(df)
-    return OhlcvResponse(symbol=symbol, provider=p.name, realtime=p.realtime, quality=report,
-                         candles=_records(df))
+    return OhlcvResponse(symbol=symbol, provider=p.name, timeframe=timeframe, realtime=p.realtime,
+                         quality=report, candles=_records(df))
+
+
+@router.get("/market/{provider}/ohlcv", response_model=OhlcvResponse)
+def ohlcv(provider: str, symbol: str, timeframe: Timeframe = Timeframe.H1,
+          limit: int = Query(300, ge=10, le=2000), indicators: bool = False,
+          continuous: bool = True) -> OhlcvResponse:
+    return _load_ohlcv(provider, symbol, timeframe, limit, indicators, continuous)
 
 
 class RiskRequest(BaseModel):
@@ -88,7 +107,7 @@ class RiskRequest(BaseModel):
     context: MarketContext
 
 
-@app.post("/risk/evaluate", response_model=RiskDecision)
+@router.post("/risk/evaluate", response_model=RiskDecision)
 def risk_evaluate(req: RiskRequest) -> RiskDecision:
     return RiskEngine(RiskLimits.from_settings(get_settings())).evaluate(req.proposal, req.portfolio, req.context)
 
@@ -98,10 +117,10 @@ class BacktestRequest(BaseModel):
     asset_class: AssetClass = AssetClass.CRYPTO
     provider: str = "synthetic"
     timeframe: Timeframe = Timeframe.H1
-    bars: int = 2000
+    bars: int = Field(2000, ge=100, le=10000)
 
 
-@app.post("/backtest", response_model=BacktestResult)
+@router.post("/backtest", response_model=BacktestResult)
 def backtest(req: BacktestRequest) -> BacktestResult:
     p = _provider(req.provider)
     df, report = assess(p.fetch_ohlcv(req.symbol, req.timeframe, limit=req.bars), req.timeframe)
@@ -111,3 +130,28 @@ def backtest(req: BacktestRequest) -> BacktestResult:
     return run_backtest(df, Instrument(symbol=req.symbol, asset_class=req.asset_class),
                         EmaRsiAtrStrategy(), starting_cash=float(get_settings().starting_equity),
                         periods_per_year=periods)
+
+
+@router.websocket("/ws/market")
+async def ws_market(ws: WebSocket, provider: str = "synthetic", symbol: str = "SYN-USD",
+                    timeframe: Timeframe = Timeframe.M1) -> None:
+    """Sends a `snapshot` with recent candles, then the latest candle as `update` every
+    `ws_push_interval_seconds` (polling the provider; no exchange stream is opened)."""
+    await ws.accept()
+    interval = get_settings().ws_push_interval_seconds
+    try:
+        snap = await run_in_threadpool(_load_ohlcv, provider, symbol, timeframe, 200, False, True)
+        await ws.send_json({"type": "snapshot", **snap.model_dump(mode="json")})
+        while True:
+            await asyncio.sleep(interval)
+            latest = await run_in_threadpool(_load_ohlcv, provider, symbol, timeframe, 10, False, True)
+            await ws.send_json({"type": "update", "symbol": symbol, "candle": latest.candles[-1],
+                                "quality": latest.quality.model_dump(mode="json")})
+    except HTTPException as e:
+        await ws.send_json({"type": "error", "status": e.status_code, "detail": e.detail})
+        await ws.close(code=1011)
+    except WebSocketDisconnect:
+        pass
+
+
+app.include_router(router)

@@ -167,7 +167,7 @@ class RiskEngine:
             add(CheckCode.WIDE_SPREAD, ctx.spread_bps <= L.max_spread_bps,
                 f"spread {ctx.spread_bps}bps (max {L.max_spread_bps})")
         add(CheckCode.SESSION_CLOSED, session_open(p.instrument.asset_class, ctx.as_of),
-            f"{p.instrument.asset_class} session at {ensure_utc(ctx.as_of).isoformat()}")
+            f"{p.instrument.asset_class} session at {ensure_utc(ctx.as_of):%Y-%m-%d %H:%M} UTC")
 
         daily_loss = (pf.day_start_equity - pf.equity) / pf.day_start_equity
         add(CheckCode.DAILY_LOSS, daily_loss < L.max_daily_loss,
@@ -176,9 +176,9 @@ class RiskEngine:
         add(CheckCode.MAX_DRAWDOWN, dd < L.max_drawdown, f"drawdown {dd:.4f} (max {L.max_drawdown})")
         add(CheckCode.MAX_OPEN_POSITIONS, len(pf.positions) < L.max_open_positions,
             f"{len(pf.positions)} open (max {L.max_open_positions})")
-        add(CheckCode.DUPLICATE_POSITION,
-            all(pos.symbol != p.instrument.symbol for pos in pf.positions),
-            f"existing position in {p.instrument.symbol}")
+        held = any(pos.symbol == p.instrument.symbol for pos in pf.positions)
+        add(CheckCode.DUPLICATE_POSITION, not held,
+            f"{'already holding' if held else 'no open position in'} {p.instrument.symbol}")
         group = p.instrument.correlation_group
         if group:
             n = sum(1 for pos in pf.positions if pos.correlation_group == group)

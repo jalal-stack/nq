@@ -1,18 +1,31 @@
 # Implementation Roadmap
 
-Each phase ends with passing tests and updated docs. Real-money trading stays disabled in every phase.
+Each phase ends with passing tests and updated docs. Real-money trading stays disabled in every
+phase and requires a separate explicit decision by the owner plus a full security review.
 
-## Phase 0 — Foundation ✅ (this change)
+Deployment target (no Docker anywhere): React/Vite frontend on Vercel; FastAPI on an Ubuntu VPS
+behind Nginx (HTTPS) under systemd + Gunicorn/Uvicorn; PostgreSQL and Redis installed natively.
+
+## Phase 0 — Foundation ✅
 Domain types, settings with paper-only lock, market data abstraction + validation, indicators,
-deterministic Risk Engine, PaperBroker, performance metrics, backtester, FastAPI, 24 tests,
-audit and external integration register.
+deterministic Risk Engine, PaperBroker, performance metrics, backtester, FastAPI, audit and
+external integration register.
 
-## Phase 1 — Persistence & infrastructure
+## Phase 0.5 — Deployment shape & first dashboard ✅
+- API under `/api/v1` (health reports `mode: paper_only`, `live_execution_enabled: false`),
+  CORS for the Vercel origin, WebSocket `/api/v1/ws/market`.
+- Gunicorn config, hardened systemd unit, Nginx TLS/WebSocket config, PowerShell dev script,
+  `docs/DEPLOYMENT.md`.
+- Dashboard: health/paper badge, candle chart with EMA overlays and data-quality chips, live
+  updates, backtest runner, risk-engine trade check.
+
+## Phase 1 — Persistence
+- Reconcile with the existing MVP's `db.py` / `models.py` / `migrations/001_init.sql` once that
+  code is in this repository, rather than designing a parallel schema.
 - SQLAlchemy 2 models: instruments, candles, proposals, risk decisions, approvals, orders,
   order events, fills, positions, closed trades, equity snapshots, agent runs, LLM usage.
-- Alembic migrations; PostgreSQL in Docker Compose, SQLite for tests.
-- Redis for OHLCV cache and provider rate limiting.
-- Docker Compose (api, db, redis, web) with health checks; Windows 10 / WSL 2 notes.
+- Alembic migrations against native PostgreSQL; SQLite for unit tests.
+- Redis for OHLCV cache, provider rate limiting and WebSocket fan-out.
 - Structured JSON logging with request and run IDs.
 
 ## Phase 2 — Market data hardening
@@ -40,10 +53,11 @@ audit and external integration register.
 ## Phase 5 — Approval workflow & paper trading service
 - Proposal → risk decision → user approve/reject → PaperBroker, with full audit trail.
 - Live mark-to-market loop on polled bars; daily-loss and drawdown halts.
+- Authentication for the API before it is exposed publicly with write endpoints.
 
-## Phase 6 — Dashboard (React + TypeScript + Vite + Tailwind)
+## Phase 6 — Dashboard expansion
 - Portfolio, equity curve, open orders/positions, proposal queue with risk check breakdown,
-  agent run viewer, backtest/experiment comparison, data-quality indicators, interactive charts.
+  agent run viewer, backtest/experiment comparison.
 
 ## Phase 7 — Strategy research
 - Strategy library (EMA/RSI/ATR baseline, ORB, VWAP reversion, breakout), walk-forward and

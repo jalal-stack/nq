@@ -1,0 +1,1 @@
+{"root":["./src/App.tsx","./src/main.tsx","./src/components/BacktestPanel.tsx","./src/components/CandleChart.tsx","./src/components/MarketPanel.tsx","./src/components/RiskPanel.tsx","./src/components/ui.tsx","./src/lib/api.ts","./src/lib/format.test.ts","./src/lib/format.ts"],"version":"6.0.3"}

@@ -15,16 +15,39 @@
 AI-assisted quantitative research and **paper-trading** platform for crypto, stocks and forex.
 Real-money trading is disabled by design: there is no live execution code.
 
-## Quick start (Python 3.12)
+## Layout
+
+| Path | What |
+|---|---|
+| `backend/` | FastAPI app (`trademind`): market data, indicators, risk engine, paper broker, backtester |
+| `frontend/` | React + TypeScript + Vite + Tailwind dashboard (deployed to Vercel) |
+| `deploy/` | systemd unit and Nginx config for the Ubuntu VPS |
+| `scripts/dev.ps1` | Windows PowerShell setup / test / run helper |
+
+No Docker is used anywhere.
+
+## Quick start
+
+Windows PowerShell:
+
+```powershell
+.\scripts\dev.ps1 setup
+.\scripts\dev.ps1 api    # http://127.0.0.1:8000/docs
+.\scripts\dev.ps1 web    # http://localhost:5173 (second terminal)
+```
+
+Linux / macOS:
 
 ```bash
-python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -e "backend[dev]"            # add [providers] for CCXT + yfinance
-cd backend && pytest
-uvicorn trademind.api.main:app --reload  # http://127.0.0.1:8000/docs
+python3.12 -m venv .venv && source .venv/bin/activate
+pip install -e "backend[dev]"            # add ,providers for CCXT + yfinance
+(cd backend && pytest)
+(cd backend && uvicorn trademind.api.main:app --reload)
+(cd frontend && npm install && npm run dev)
 ```
 
 ## Docs
+- [Deployment: Vercel + Ubuntu VPS](docs/DEPLOYMENT.md)
 - [Architecture audit](docs/ARCHITECTURE_AUDIT.md)
 - [Implementation roadmap](docs/IMPLEMENTATION_ROADMAP.md)
 - [Known limitations](docs/KNOWN_LIMITATIONS.md)
