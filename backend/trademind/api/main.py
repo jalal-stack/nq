@@ -137,6 +137,11 @@ async def ws_market(ws: WebSocket, provider: str = "synthetic", symbol: str = "S
                     timeframe: Timeframe = Timeframe.M1) -> None:
     """Sends a `snapshot` with recent candles, then the latest candle as `update` every
     `ws_push_interval_seconds` (polling the provider; no exchange stream is opened)."""
+    # CORS does not cover WebSockets, so browser origins are checked here.
+    origin = ws.headers.get("origin")
+    if origin is not None and origin not in get_settings().cors_origin_list:
+        await ws.close(code=1008)
+        return
     await ws.accept()
     interval = get_settings().ws_push_interval_seconds
     try:

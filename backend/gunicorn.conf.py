@@ -17,3 +17,5 @@ accesslog = "-"
 errorlog = "-"
 loglevel = os.getenv("TRADEMIND_LOG_LEVEL", "info")
 forwarded_allow_ips = "127.0.0.1"
+# Not needed in production, and the systemd sandbox makes $HOME read-only.
+control_socket_disable = True

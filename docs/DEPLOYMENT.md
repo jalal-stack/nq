@@ -52,13 +52,16 @@ sudo cp /opt/trademind/src/deploy/systemd/trademind-api.service /etc/systemd/sys
 sudo systemctl daemon-reload && sudo systemctl enable --now trademind-api
 curl -s http://127.0.0.1:8000/api/v1/health
 
-# Nginx + HTTPS (edit server_name first)
+# Nginx + HTTPS. Get the certificate first: nginx refuses a config whose certificate files are missing.
+# The standalone authenticator briefly stops nginx; the saved hooks also apply to automatic renewals.
+sudo certbot certonly --standalone -d api.YOUR-DOMAIN \
+  --pre-hook "systemctl stop nginx" --post-hook "systemctl start nginx"
 sudo cp /opt/trademind/src/deploy/nginx/trademind-api.conf /etc/nginx/sites-available/trademind-api
 sudo sed -i 's/api.example.com/api.YOUR-DOMAIN/g' /etc/nginx/sites-available/trademind-api
 sudo ln -s /etc/nginx/sites-available/trademind-api /etc/nginx/sites-enabled/
-# Get the certificate before enabling the 443 block, e.g. temporarily with only the :80 server:
-sudo certbot certonly --nginx -d api.YOUR-DOMAIN
+sudo rm -f /etc/nginx/sites-enabled/default
 sudo nginx -t && sudo systemctl reload nginx
+sudo certbot renew --dry-run
 
 # Firewall
 sudo ufw allow OpenSSH && sudo ufw allow 'Nginx Full' && sudo ufw enable

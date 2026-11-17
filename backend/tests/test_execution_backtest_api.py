@@ -127,3 +127,15 @@ def test_websocket_snapshot_and_unknown_provider():
     with c.websocket_connect("/api/v1/ws/market?provider=nope") as ws:
         msg = ws.receive_json()
         assert msg["type"] == "error" and msg["status"] == 404
+
+
+def test_websocket_rejects_unknown_browser_origin():
+    from starlette.websockets import WebSocketDisconnect
+
+    c = TestClient(app)
+    with pytest.raises(WebSocketDisconnect) as exc:
+        with c.websocket_connect("/api/v1/ws/market", headers={"Origin": "https://evil.example"}) as ws:
+            ws.receive_json()
+    assert exc.value.code == 1008
+    with c.websocket_connect("/api/v1/ws/market", headers={"Origin": "http://localhost:5173"}) as ws:
+        assert ws.receive_json()["type"] == "snapshot"
