@@ -91,17 +91,51 @@ def test_backtest_is_deterministic_and_respects_risk():
 
 def test_api():
     c = TestClient(app)
-    h = c.get("/health").json()
-    assert h["trading_mode"] == "paper" and h["live_trading_enabled"] is False
-    r = c.get("/market/synthetic/ohlcv", params={"symbol": "SYN", "limit": 250, "indicators": True})
+    h = c.get("/api/v1/health").json()
+    assert h["mode"] == "paper_only" and h["live_execution_enabled"] is False
+    r = c.get("/api/v1/market/synthetic/ohlcv", params={"symbol": "SYN", "limit": 250, "indicators": True})
     assert r.status_code == 200 and len(r.json()["candles"]) == 250 and not r.json()["realtime"]
-    assert c.get("/market/nope/ohlcv", params={"symbol": "X"}).status_code == 404
-    assert c.post("/backtest", json={"bars": 800}).status_code == 200
+    assert c.get("/api/v1/market/nope/ohlcv", params={"symbol": "X"}).status_code == 404
+    assert c.post("/api/v1/backtest", json={"bars": 800}).status_code == 200
     body = {
         "proposal": {"instrument": {"symbol": "BTC", "asset_class": "crypto"}, "side": "buy",
                      "entry_price": "100", "stop_loss": "101", "strategy": "t"},
         "portfolio": {"equity": "5000", "peak_equity": "5000", "day_start_equity": "5000"},
         "context": {"as_of": "2026-01-06T15:00:00Z", "last_data_ts": "2026-01-06T14:59:00Z"},
     }
-    d = c.post("/risk/evaluate", json=body).json()
+    d = c.post("/api/v1/risk/evaluate", json=body).json()
     assert d["approved"] is False and any(x["code"] == "stop_side" and not x["passed"] for x in d["checks"])
+    assert c.post("/api/v1/backtest", json={"bars": 5}).status_code == 422
+    assert c.get("/api/v1/live/orders").status_code == 404  # no live trading surface
+
+
+def test_cors_allows_configured_origin_only():
+    c = TestClient(app)
+    ok = c.options("/api/v1/health", headers={"Origin": "http://localhost:5173",
+                                              "Access-Control-Request-Method": "GET"})
+    assert ok.headers.get("access-control-allow-origin") == "http://localhost:5173"
+    bad = c.options("/api/v1/health", headers={"Origin": "https://evil.example",
+                                               "Access-Control-Request-Method": "GET"})
+    assert "access-control-allow-origin" not in bad.headers
+
+
+def test_websocket_snapshot_and_unknown_provider():
+    c = TestClient(app)
+    with c.websocket_connect("/api/v1/ws/market?symbol=SYN&timeframe=1m") as ws:
+        msg = ws.receive_json()
+        assert msg["type"] == "snapshot" and len(msg["candles"]) == 200 and msg["symbol"] == "SYN"
+    with c.websocket_connect("/api/v1/ws/market?provider=nope") as ws:
+        msg = ws.receive_json()
+        assert msg["type"] == "error" and msg["status"] == 404
+
+
+def test_websocket_rejects_unknown_browser_origin():
+    from starlette.websockets import WebSocketDisconnect
+
+    c = TestClient(app)
+    with pytest.raises(WebSocketDisconnect) as exc:
+        with c.websocket_connect("/api/v1/ws/market", headers={"Origin": "https://evil.example"}) as ws:
+            ws.receive_json()
+    assert exc.value.code == 1008
+    with c.websocket_connect("/api/v1/ws/market", headers={"Origin": "http://localhost:5173"}) as ws:
+        assert ws.receive_json()["type"] == "snapshot"

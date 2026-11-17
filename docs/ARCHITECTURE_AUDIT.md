@@ -26,6 +26,17 @@ designed to absorb it (provider adapters, strategy protocol, risk engine interfa
 
 Environment observed: Python 3.12.3, Node 24, no Docker daemon in the build sandbox.
 
+### Re-audit (second brief, same day)
+
+The second brief describes the MVP's layout (`backend/app/{main,config,db,models,schemas,seed,
+market_data,strategy,risk,paper}.py`, `migrations/001_init.sql`, `GET /api/v1/health` returning
+`paper_only` / `live_execution_enabled = false`, three passing risk tests). A fresh fetch of all
+remote branches still shows no such files, so that code lives only on the owner's machine.
+To stay compatible, this API now serves everything under `/api/v1` and `/api/v1/health` reports
+`mode: "paper_only"` and `live_execution_enabled: false`. The new brief also forbids Docker:
+nothing in this repository uses Docker, and deployment targets Vercel (frontend) and an Ubuntu
+VPS with Nginx + systemd (backend). See `DEPLOYMENT.md`.
+
 ## 2. Implemented foundation (this change)
 
 ```
@@ -38,8 +49,8 @@ backend/trademind/
   execution/paper.py PaperBroker: market/limit, fees, spread, slippage, partial fills, expiry, SL/TP
   performance/       net profit, win rate, PF, expectancy, Sharpe, Sortino, drawdown, exposure
   backtest/engine.py event-driven backtester sharing risk + execution with paper trading
-  api/main.py        FastAPI: /health, /config, /market/{provider}/ohlcv, /risk/evaluate, /backtest
-backend/tests/       24 pytest tests (offline, deterministic)
+  api/main.py        FastAPI under /api/v1: health, config, market OHLCV, risk/evaluate, backtest, ws/market
+backend/tests/       26 pytest tests (offline, deterministic)
 ```
 
 ### Design decisions
@@ -59,9 +70,9 @@ backend/tests/       24 pytest tests (offline, deterministic)
 ## 3. Gaps versus the brief
 
 See `IMPLEMENTATION_ROADMAP.md` for sequencing. Not yet built: persistence (SQLAlchemy/Alembic,
-PostgreSQL, Redis), Docker Compose, the 12 LLM agents and orchestrator, the LLM provider
+PostgreSQL, Redis), the 12 LLM agents and orchestrator, the LLM provider
 abstraction, news/fundamental/sentiment data sources, user approval workflow, read-only on-chain
-adapters, and the React dashboard.
+adapters, and the portfolio/proposal/agent views of the dashboard.
 
 ## 4. External tools
 
