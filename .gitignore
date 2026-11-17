@@ -6,3 +6,9 @@ __pycache__/
 node_modules/
 dist/
 *.tsbuildinfo
+# Never commit local data or secrets from the imported MVP
+legacy/**/.env
+legacy/**/.venv/
+*.db
+*.sqlite
+*.sqlite3
