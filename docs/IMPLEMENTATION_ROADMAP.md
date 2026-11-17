@@ -20,8 +20,8 @@ external integration register.
   updates, backtest runner, risk-engine trade check.
 
 ## Phase 1 — Persistence
-- Reconcile with the existing MVP's `db.py` / `models.py` / `migrations/001_init.sql` once that
-  code is in this repository, rather than designing a parallel schema.
+- Import the MVP into `legacy/mvp/` and port its `db.py` / `models.py` / `migrations/001_init.sql`
+  as the baseline rather than designing a parallel schema (procedure: `docs/MVP_INTEGRATION.md`).
 - SQLAlchemy 2 models: instruments, candles, proposals, risk decisions, approvals, orders,
   order events, fills, positions, closed trades, equity snapshots, agent runs, LLM usage.
 - Alembic migrations against native PostgreSQL; SQLite for unit tests.

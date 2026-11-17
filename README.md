@@ -52,5 +52,6 @@ pip install -e "backend[dev]"            # add ,providers for CCXT + yfinance
 - [Implementation roadmap](docs/IMPLEMENTATION_ROADMAP.md)
 - [Known limitations](docs/KNOWN_LIMITATIONS.md)
 - [External integrations register](docs/EXTERNAL_INTEGRATIONS.md)
+- [Integrating the local MVP](docs/MVP_INTEGRATION.md)
 
 Nothing here is financial advice, and no backtest result is evidence of future profit.
